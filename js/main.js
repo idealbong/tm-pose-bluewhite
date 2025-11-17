@@ -435,53 +435,16 @@ function playTTS(text) {
     return;
   }
 
-  console.log('🎤 Attempting to speak:', text);
+  // 간단하고 직접적인 방식 (작동하는 코드와 동일)
+  window.speechSynthesis.cancel();
 
-  // 이전 음성이 재생 중이면 중단
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'ko-KR';
+  utterance.rate = 1.2;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
 
-  // 약간의 딜레이 후 실행 (cancel 후 즉시 speak 방지)
-  setTimeout(() => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ko-KR';
-    utterance.rate = 1.2;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    // 한국어 음성 선택
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      const koreanVoice = voices.find(voice =>
-        voice.lang === 'ko-KR' || voice.lang.startsWith('ko')
-      );
-      if (koreanVoice) {
-        utterance.voice = koreanVoice;
-        console.log('Using Korean voice:', koreanVoice.name);
-      } else {
-        console.log('Korean voice not found, using default');
-      }
-    } else {
-      console.warn('No voices available yet');
-    }
-
-    utterance.onstart = () => {
-      console.log('🔊 TTS started:', text);
-    };
-
-    utterance.onend = () => {
-      console.log('✅ TTS ended:', text);
-    };
-
-    utterance.onerror = (event) => {
-      if (event.error !== 'canceled' && event.error !== 'interrupted') {
-        console.error('❌ TTS Error:', event.error);
-      }
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, 100);
+  window.speechSynthesis.speak(utterance);
 }
 
 /**
