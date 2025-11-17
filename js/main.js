@@ -430,59 +430,58 @@ function showGameOverScreen(stats) {
  * TTS 음성 출력
  */
 function playTTS(text) {
-  if ('speechSynthesis' in window) {
-    // 진행 중인 음성이 있으면 중단하고 재시작
-    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-      window.speechSynthesis.cancel();
-      // cancel 후 충분한 딜레이 필요
-      setTimeout(() => playTTSInternal(text), 200);
-    } else {
-      playTTSInternal(text);
-    }
-  } else {
+  if (!('speechSynthesis' in window)) {
     console.warn('TTS not supported in this browser');
-  }
-}
-
-/**
- * 내부 TTS 실행 함수
- */
-function playTTSInternal(text) {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'ko-KR';
-  utterance.rate = 1.3; // 빠르게
-  utterance.pitch = 1.1;
-  utterance.volume = 1.0;
-
-  // 음성 목록이 로드되지 않았을 경우 대비
-  const voices = window.speechSynthesis.getVoices();
-  const koreanVoice = voices.find(voice => voice.lang.startsWith('ko'));
-  if (koreanVoice) {
-    utterance.voice = koreanVoice;
+    return;
   }
 
-  // 에러 핸들링
-  utterance.onerror = (event) => {
-    console.error('TTS Error:', event.error);
-    // 에러 발생 시 재시도 (무한 루프 방지)
-    if (event.error === 'canceled' || event.error === 'interrupted') {
-      console.log('TTS was cancelled, this is normal');
+  console.log('🎤 Attempting to speak:', text);
+
+  // 이전 음성이 재생 중이면 중단
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+
+  // 약간의 딜레이 후 실행 (cancel 후 즉시 speak 방지)
+  setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 1.2;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    // 한국어 음성 선택
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const koreanVoice = voices.find(voice =>
+        voice.lang === 'ko-KR' || voice.lang.startsWith('ko')
+      );
+      if (koreanVoice) {
+        utterance.voice = koreanVoice;
+        console.log('Using Korean voice:', koreanVoice.name);
+      } else {
+        console.log('Korean voice not found, using default');
+      }
+    } else {
+      console.warn('No voices available yet');
     }
-  };
 
-  utterance.onstart = () => {
-    console.log('TTS started:', text);
-  };
+    utterance.onstart = () => {
+      console.log('🔊 TTS started:', text);
+    };
 
-  utterance.onend = () => {
-    console.log('TTS ended:', text);
-  };
+    utterance.onend = () => {
+      console.log('✅ TTS ended:', text);
+    };
 
-  try {
+    utterance.onerror = (event) => {
+      if (event.error !== 'canceled' && event.error !== 'interrupted') {
+        console.error('❌ TTS Error:', event.error);
+      }
+    };
+
     window.speechSynthesis.speak(utterance);
-  } catch (error) {
-    console.error('Failed to speak:', error);
-  }
+  }, 100);
 }
 
 /**
