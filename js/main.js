@@ -7,6 +7,7 @@
 let poseEngine;
 let gameEngine;
 let stabilizer;
+let audioManager;
 let ctx;
 let labelContainer;
 
@@ -112,7 +113,10 @@ async function initializeGame() {
     smoothingFrames: 2 // 빠른 반응을 위해 프레임 수 줄임
   });
 
-  // 3. GameEngine 초기화
+  // 3. AudioManager 초기화
+  audioManager = new AudioManager();
+
+  // 4. GameEngine 초기화
   gameEngine = new GameEngine();
   setupGameCallbacks();
 
@@ -412,10 +416,10 @@ function playTTS(text) {
 }
 
 /**
- * 효과음 재생 (Web Audio API 또는 HTML5 Audio)
+ * 효과음 재생
  */
 function playSound(type) {
-  // TODO: 실제 오디오 파일이 있으면 재생
-  // 현재는 콘솔에만 로그
-  console.log(`Sound: ${type}`);
+  if (audioManager) {
+    audioManager.play(type);
+  }
 }
