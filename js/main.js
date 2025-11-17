@@ -79,6 +79,15 @@ async function handleStart() {
 
   try {
     await initializeGame();
+
+    // AudioContext 활성화 (사용자 인터랙션)
+    if (audioManager && audioManager.audioContext) {
+      audioManager.resume();
+    }
+
+    // TTS 테스트 (게임 시작 전에 한 번 실행하여 활성화)
+    window.speechSynthesis.cancel();
+
     switchScreen('game');
     startGame();
   } catch (error) {
@@ -435,6 +444,13 @@ function playTTS(text) {
     return;
   }
 
+  console.log('🔊 Speaking:', text);
+
+  // AudioContext가 있으면 resume (사용자 인터랙션 확보)
+  if (audioManager && audioManager.audioContext) {
+    audioManager.resume();
+  }
+
   // 간단하고 직접적인 방식 (작동하는 코드와 동일)
   window.speechSynthesis.cancel();
 
@@ -444,7 +460,21 @@ function playTTS(text) {
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
+  utterance.onstart = () => {
+    console.log('✅ TTS started');
+  };
+
+  utterance.onend = () => {
+    console.log('✅ TTS ended');
+  };
+
+  utterance.onerror = (event) => {
+    console.error('❌ TTS error:', event.error);
+  };
+
+  console.log('Calling speak()...');
   window.speechSynthesis.speak(utterance);
+  console.log('speak() called, speaking:', window.speechSynthesis.speaking, 'pending:', window.speechSynthesis.pending);
 }
 
 /**
