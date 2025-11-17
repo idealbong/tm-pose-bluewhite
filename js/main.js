@@ -431,33 +431,57 @@ function showGameOverScreen(stats) {
  */
 function playTTS(text) {
   if ('speechSynthesis' in window) {
-    // 진행 중인 음성 중단
-    window.speechSynthesis.cancel();
-
-    // 짧은 딜레이 후 TTS 실행 (브라우저 호환성)
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ko-KR';
-      utterance.rate = 1.3; // 빠르게
-      utterance.pitch = 1.1;
-      utterance.volume = 1.0;
-
-      // 음성 목록이 로드되지 않았을 경우 대비
-      const voices = window.speechSynthesis.getVoices();
-      const koreanVoice = voices.find(voice => voice.lang.startsWith('ko'));
-      if (koreanVoice) {
-        utterance.voice = koreanVoice;
-      }
-
-      // 에러 핸들링
-      utterance.onerror = (event) => {
-        console.error('TTS Error:', event);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    }, 100);
+    // 진행 중인 음성이 있으면 중단하고 재시작
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+      // cancel 후 충분한 딜레이 필요
+      setTimeout(() => playTTSInternal(text), 200);
+    } else {
+      playTTSInternal(text);
+    }
   } else {
     console.warn('TTS not supported in this browser');
+  }
+}
+
+/**
+ * 내부 TTS 실행 함수
+ */
+function playTTSInternal(text) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'ko-KR';
+  utterance.rate = 1.3; // 빠르게
+  utterance.pitch = 1.1;
+  utterance.volume = 1.0;
+
+  // 음성 목록이 로드되지 않았을 경우 대비
+  const voices = window.speechSynthesis.getVoices();
+  const koreanVoice = voices.find(voice => voice.lang.startsWith('ko'));
+  if (koreanVoice) {
+    utterance.voice = koreanVoice;
+  }
+
+  // 에러 핸들링
+  utterance.onerror = (event) => {
+    console.error('TTS Error:', event.error);
+    // 에러 발생 시 재시도 (무한 루프 방지)
+    if (event.error === 'canceled' || event.error === 'interrupted') {
+      console.log('TTS was cancelled, this is normal');
+    }
+  };
+
+  utterance.onstart = () => {
+    console.log('TTS started:', text);
+  };
+
+  utterance.onend = () => {
+    console.log('TTS ended:', text);
+  };
+
+  try {
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.error('Failed to speak:', error);
   }
 }
 
