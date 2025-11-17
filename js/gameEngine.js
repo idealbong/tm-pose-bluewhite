@@ -1,43 +1,83 @@
 /**
  * gameEngine.js
- * 게임 단계, 명령, 점수, 제한시간 등 게임 규칙 전체를 담당
+ * 청기백기 게임 로직 전체를 담당
  *
- * 포즈 인식을 활용한 게임 로직을 관리하는 엔진
- * (현재는 기본 템플릿이므로 향후 게임 로직 추가 가능)
+ * 게임 규칙:
+ * - 각 단계마다 5번 시행
+ * - 2번 실패 시 게임 오버
+ * - 1번 이하 실패 시 다음 단계 진입
+ * - 단계마다 제한 시간 0.1초씩 감소 (1.5초 → 1.4초 → ...)
  */
 
 class GameEngine {
   constructor() {
-    this.score = 0;
-    this.level = 1;
-    this.timeLimit = 0;
-    this.currentCommand = null;
+    // 게임 상태
     this.isGameActive = false;
-    this.gameTimer = null;
-    this.onCommandChange = null; // 명령 변경 콜백
-    this.onScoreChange = null; // 점수 변경 콜백
-    this.onGameEnd = null; // 게임 종료 콜백
+    this.isPaused = false;
+
+    // 단계 관리
+    this.level = 1; // 현재 단계
+    this.maxLevel = 1; // 최고 도달 단계
+
+    // 진행도
+    this.currentRound = 0; // 현재 라운드 (0~4, 총 5회)
+    this.failCount = 0; // 현재 단계 실패 횟수 (0~2)
+    this.totalSuccess = 0; // 총 성공 횟수
+
+    // 타이머
+    this.baseTimeLimit = 1.5; // 1단계 기본 시간 (초)
+    this.timeDecrement = 0.1; // 단계마다 감소 시간
+    this.minTimeLimit = 0.6; // 최소 제한 시간
+    this.currentTimeLimit = 1.5; // 현재 제한 시간
+    this.remainingTime = 1.5; // 남은 시간
+    this.commandTimer = null; // 명령 타이머
+
+    // 명령
+    this.commands = [
+      { text: '청기 올려', expectedPose: '왼손 올리기', type: 'raise' },
+      { text: '백기 올려', expectedPose: '오른손 올리기', type: 'raise' },
+      { text: '둘 다 올려', expectedPose: '양손 올리기', type: 'raise' },
+      { text: '청기 올리지 마', expectedPose: '기본', type: 'hold' },
+      { text: '백기 올리지 마', expectedPose: '기본', type: 'hold' },
+      { text: '둘 다 올리지 마', expectedPose: '기본', type: 'hold' }
+    ];
+    this.currentCommand = null;
+
+    // 게임 시간
+    this.gameStartTime = 0;
+    this.gameEndTime = 0;
+
+    // 콜백
+    this.onCommandIssued = null; // 명령 발급 콜백
+    this.onRoundResult = null; // 라운드 결과 콜백 (success/fail)
+    this.onLevelComplete = null; // 단계 클리어 콜백
+    this.onGameOver = null; // 게임 오버 콜백
+    this.onTimerTick = null; // 타이머 틱 콜백
+    this.onStateChange = null; // 상태 변경 콜백
   }
 
   /**
    * 게임 시작
-   * @param {Object} config - 게임 설정 { timeLimit, commands }
    */
-  start(config = {}) {
+  start() {
     this.isGameActive = true;
-    this.score = 0;
+    this.isPaused = false;
+
+    // 초기화
     this.level = 1;
-    this.timeLimit = config.timeLimit || 60; // 기본 60초
-    this.commands = config.commands || []; // 게임 명령어 배열
+    this.currentRound = 0;
+    this.failCount = 0;
+    this.totalSuccess = 0;
+    this.gameStartTime = Date.now();
 
-    if (this.timeLimit > 0) {
-      this.startTimer();
-    }
+    // 1단계 시작
+    this.currentTimeLimit = this.baseTimeLimit;
+    this.notifyStateChange();
 
-    // 첫 번째 명령 발급 (게임 모드일 경우)
-    if (this.commands.length > 0) {
+    // 첫 명령 발급 (짧은 딜레이 후)
+    setTimeout(() => {
       this.issueNewCommand();
-    }
+    }, 1000);
   }
 
   /**
@@ -45,103 +85,324 @@ class GameEngine {
    */
   stop() {
     this.isGameActive = false;
-    this.clearTimer();
-
-    if (this.onGameEnd) {
-      this.onGameEnd(this.score, this.level);
-    }
+    this.clearCommandTimer();
   }
 
   /**
-   * 타이머 시작
+   * 게임 일시정지
    */
-  startTimer() {
-    this.gameTimer = setInterval(() => {
-      this.timeLimit--;
-
-      if (this.timeLimit <= 0) {
-        this.stop();
-      }
-    }, 1000);
+  pause() {
+    this.isPaused = true;
+    this.clearCommandTimer();
   }
 
   /**
-   * 타이머 정리
+   * 게임 재개
    */
-  clearTimer() {
-    if (this.gameTimer) {
-      clearInterval(this.gameTimer);
-      this.gameTimer = null;
-    }
+  resume() {
+    if (!this.isGameActive) return;
+    this.isPaused = false;
+    // 타이머 재시작이 필요하면 여기서 처리
   }
 
   /**
    * 새로운 명령 발급
    */
   issueNewCommand() {
-    if (this.commands.length === 0) return;
+    if (!this.isGameActive || this.isPaused) return;
 
+    // 5회 완료 체크
+    if (this.currentRound >= 5) {
+      this.completeLevel();
+      return;
+    }
+
+    // 랜덤 명령 선택
     const randomIndex = Math.floor(Math.random() * this.commands.length);
     this.currentCommand = this.commands[randomIndex];
 
-    if (this.onCommandChange) {
-      this.onCommandChange(this.currentCommand);
+    // 남은 시간 초기화
+    this.remainingTime = this.currentTimeLimit;
+
+    // 명령 발급 콜백
+    if (this.onCommandIssued) {
+      this.onCommandIssued({
+        command: this.currentCommand,
+        round: this.currentRound + 1,
+        timeLimit: this.currentTimeLimit
+      });
+    }
+
+    // 타이머 시작
+    this.startCommandTimer();
+  }
+
+  /**
+   * 명령 타이머 시작 (밀리초 단위로 정확하게)
+   */
+  startCommandTimer() {
+    this.clearCommandTimer();
+
+    const startTime = Date.now();
+    const duration = this.currentTimeLimit * 1000; // 밀리초로 변환
+
+    this.commandTimer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      this.remainingTime = Math.max(0, (duration - elapsed) / 1000);
+
+      // 타이머 틱 콜백
+      if (this.onTimerTick) {
+        this.onTimerTick({
+          remaining: this.remainingTime,
+          total: this.currentTimeLimit,
+          percentage: (this.remainingTime / this.currentTimeLimit) * 100
+        });
+      }
+
+      // 시간 초과
+      if (this.remainingTime <= 0) {
+        this.clearCommandTimer();
+        this.handleTimeout();
+      }
+    }, 16); // 약 60fps
+  }
+
+  /**
+   * 명령 타이머 정리
+   */
+  clearCommandTimer() {
+    if (this.commandTimer) {
+      clearInterval(this.commandTimer);
+      this.commandTimer = null;
     }
   }
 
   /**
-   * 포즈 인식 결과 처리
-   * @param {string} detectedPose - 인식된 포즈 이름
+   * 포즈 검증
+   * @param {string} detectedPose - 감지된 포즈 ("기본", "왼손 올리기", "오른손 올리기", "양손 올리기")
    */
-  onPoseDetected(detectedPose) {
+  verifyPose(detectedPose) {
+    if (!this.isGameActive || this.isPaused || !this.currentCommand) return;
+
+    const isCorrect = detectedPose === this.currentCommand.expectedPose;
+
+    if (isCorrect) {
+      this.handleSuccess();
+    }
+  }
+
+  /**
+   * 성공 처리
+   */
+  handleSuccess() {
+    this.clearCommandTimer();
+
+    this.totalSuccess++;
+    this.currentRound++;
+
+    // 성공 콜백
+    if (this.onRoundResult) {
+      this.onRoundResult({
+        result: 'success',
+        round: this.currentRound,
+        failCount: this.failCount,
+        totalSuccess: this.totalSuccess
+      });
+    }
+
+    this.notifyStateChange();
+
+    // 다음 명령 발급 (0.5초 대기)
+    setTimeout(() => {
+      this.issueNewCommand();
+    }, 500);
+  }
+
+  /**
+   * 실패 처리 (시간 초과 또는 잘못된 포즈)
+   */
+  handleFailure() {
+    this.clearCommandTimer();
+
+    this.failCount++;
+    this.currentRound++;
+
+    // 실패 콜백
+    if (this.onRoundResult) {
+      this.onRoundResult({
+        result: 'fail',
+        round: this.currentRound,
+        failCount: this.failCount,
+        totalSuccess: this.totalSuccess
+      });
+    }
+
+    this.notifyStateChange();
+
+    // 2번 실패 시 게임 오버
+    if (this.failCount >= 2) {
+      setTimeout(() => {
+        this.gameOver();
+      }, 1000);
+    } else {
+      // 다음 명령 발급 (0.5초 대기)
+      setTimeout(() => {
+        this.issueNewCommand();
+      }, 500);
+    }
+  }
+
+  /**
+   * 시간 초과 처리
+   */
+  handleTimeout() {
+    this.handleFailure();
+  }
+
+  /**
+   * 단계 클리어
+   */
+  completeLevel() {
+    if (this.failCount < 2) {
+      // 단계 클리어 성공
+      if (this.onLevelComplete) {
+        this.onLevelComplete({
+          level: this.level,
+          failCount: this.failCount,
+          totalSuccess: this.totalSuccess
+        });
+      }
+
+      // 다음 단계 준비 (2초 대기 - 축포 애니메이션)
+      setTimeout(() => {
+        this.nextLevel();
+      }, 2000);
+    } else {
+      // 2번 실패로 게임 오버
+      this.gameOver();
+    }
+  }
+
+  /**
+   * 다음 단계 진입
+   */
+  nextLevel() {
     if (!this.isGameActive) return;
 
-    // 현재 명령과 일치하는지 확인
-    if (this.currentCommand && detectedPose === this.currentCommand) {
-      this.addScore(10); // 점수 추가
-      this.issueNewCommand(); // 새로운 명령 발급
+    this.level++;
+    this.currentRound = 0;
+    this.failCount = 0;
+
+    // 제한 시간 감소 (최소값 유지)
+    this.currentTimeLimit = Math.max(
+      this.minTimeLimit,
+      this.baseTimeLimit - (this.level - 1) * this.timeDecrement
+    );
+
+    // 최고 레벨 갱신
+    if (this.level > this.maxLevel) {
+      this.maxLevel = this.level;
+    }
+
+    this.notifyStateChange();
+
+    // 다음 단계 첫 명령 발급
+    setTimeout(() => {
+      this.issueNewCommand();
+    }, 500);
+  }
+
+  /**
+   * 게임 오버
+   */
+  gameOver() {
+    this.isGameActive = false;
+    this.gameEndTime = Date.now();
+    this.clearCommandTimer();
+
+    const gameStats = this.getGameStats();
+
+    // 최고 기록 저장
+    this.saveHighScore(gameStats);
+
+    // 게임 오버 콜백
+    if (this.onGameOver) {
+      this.onGameOver(gameStats);
     }
   }
 
   /**
-   * 점수 추가
-   * @param {number} points - 추가할 점수
+   * 게임 통계 반환
    */
-  addScore(points) {
-    this.score += points;
+  getGameStats() {
+    const playTime = this.gameEndTime - this.gameStartTime;
+    const minutes = Math.floor(playTime / 60000);
+    const seconds = Math.floor((playTime % 60000) / 1000);
 
-    // 레벨업 로직 (예: 100점마다)
-    if (this.score >= this.level * 100) {
-      this.level++;
+    return {
+      level: this.level,
+      totalSuccess: this.totalSuccess,
+      playTime: playTime,
+      playTimeFormatted: `${minutes}:${seconds.toString().padStart(2, '0')}`
+    };
+  }
+
+  /**
+   * 최고 기록 저장 (Local Storage)
+   */
+  saveHighScore(stats) {
+    try {
+      const bestRecord = this.loadHighScore();
+
+      let isNewRecord = false;
+
+      // 최고 단계 갱신
+      if (!bestRecord.bestLevel || stats.level > bestRecord.bestLevel) {
+        bestRecord.bestLevel = stats.level;
+        isNewRecord = true;
+      }
+
+      // 최다 성공 갱신
+      if (!bestRecord.bestSuccess || stats.totalSuccess > bestRecord.bestSuccess) {
+        bestRecord.bestSuccess = stats.totalSuccess;
+        isNewRecord = true;
+      }
+
+      localStorage.setItem('bluewhite_highscore', JSON.stringify(bestRecord));
+
+      return isNewRecord;
+    } catch (error) {
+      console.error('Failed to save high score:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 최고 기록 불러오기 (Local Storage)
+   */
+  loadHighScore() {
+    try {
+      const saved = localStorage.getItem('bluewhite_highscore');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Failed to load high score:', error);
     }
 
-    if (this.onScoreChange) {
-      this.onScoreChange(this.score, this.level);
+    return {
+      bestLevel: 0,
+      bestSuccess: 0
+    };
+  }
+
+  /**
+   * 상태 변경 알림
+   */
+  notifyStateChange() {
+    if (this.onStateChange) {
+      this.onStateChange(this.getGameState());
     }
-  }
-
-  /**
-   * 명령 변경 콜백 등록
-   * @param {Function} callback - (command) => void
-   */
-  setCommandChangeCallback(callback) {
-    this.onCommandChange = callback;
-  }
-
-  /**
-   * 점수 변경 콜백 등록
-   * @param {Function} callback - (score, level) => void
-   */
-  setScoreChangeCallback(callback) {
-    this.onScoreChange = callback;
-  }
-
-  /**
-   * 게임 종료 콜백 등록
-   * @param {Function} callback - (finalScore, finalLevel) => void
-   */
-  setGameEndCallback(callback) {
-    this.onGameEnd = callback;
   }
 
   /**
@@ -150,11 +411,42 @@ class GameEngine {
   getGameState() {
     return {
       isActive: this.isGameActive,
-      score: this.score,
+      isPaused: this.isPaused,
       level: this.level,
-      timeRemaining: this.timeLimit,
+      round: this.currentRound,
+      failCount: this.failCount,
+      totalSuccess: this.totalSuccess,
+      currentTimeLimit: this.currentTimeLimit,
+      remainingTime: this.remainingTime,
       currentCommand: this.currentCommand
     };
+  }
+
+  /**
+   * 콜백 설정 메서드들
+   */
+  setCommandIssuedCallback(callback) {
+    this.onCommandIssued = callback;
+  }
+
+  setRoundResultCallback(callback) {
+    this.onRoundResult = callback;
+  }
+
+  setLevelCompleteCallback(callback) {
+    this.onLevelComplete = callback;
+  }
+
+  setGameOverCallback(callback) {
+    this.onGameOver = callback;
+  }
+
+  setTimerTickCallback(callback) {
+    this.onTimerTick = callback;
+  }
+
+  setStateChangeCallback(callback) {
+    this.onStateChange = callback;
   }
 }
 
