@@ -117,6 +117,16 @@ function handleRestart() {
  * 게임 초기화 (포즈 엔진, 게임 엔진)
  */
 async function initializeGame() {
+  // 0. TTS 초기화 (음성 목록 로드)
+  if ('speechSynthesis' in window) {
+    // 음성 목록 강제 로드
+    window.speechSynthesis.getVoices();
+    // 음성 변경 이벤트 리스너
+    window.speechSynthesis.onvoiceschanged = () => {
+      console.log('TTS voices loaded:', window.speechSynthesis.getVoices().length);
+    };
+  }
+
   // 1. PoseEngine 초기화
   poseEngine = new PoseEngine('./my_model/');
   const { maxPredictions } = await poseEngine.init({
@@ -424,11 +434,30 @@ function playTTS(text) {
     // 진행 중인 음성 중단
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ko-KR';
-    utterance.rate = 1.2; // 빠르게
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
+    // 짧은 딜레이 후 TTS 실행 (브라우저 호환성)
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 1.3; // 빠르게
+      utterance.pitch = 1.1;
+      utterance.volume = 1.0;
+
+      // 음성 목록이 로드되지 않았을 경우 대비
+      const voices = window.speechSynthesis.getVoices();
+      const koreanVoice = voices.find(voice => voice.lang.startsWith('ko'));
+      if (koreanVoice) {
+        utterance.voice = koreanVoice;
+      }
+
+      // 에러 핸들링
+      utterance.onerror = (event) => {
+        console.error('TTS Error:', event);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }, 100);
+  } else {
+    console.warn('TTS not supported in this browser');
   }
 }
 
