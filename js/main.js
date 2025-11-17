@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 버튼
     startBtn: document.getElementById('startBtn'),
+    stopBtn: document.getElementById('stopBtn'),
     restartBtn: document.getElementById('restartBtn'),
 
     // 게임 정보
@@ -65,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 이벤트 리스너 등록
   elements.startBtn.addEventListener('click', handleStart);
+  elements.stopBtn.addEventListener('click', handleStop);
   elements.restartBtn.addEventListener('click', handleRestart);
 });
 
@@ -85,6 +87,21 @@ async function handleStart() {
     elements.startBtn.disabled = false;
     elements.startBtn.textContent = '게임 시작';
   }
+}
+
+/**
+ * 게임 중지 버튼 클릭
+ */
+function handleStop() {
+  if (gameEngine) {
+    gameEngine.stop();
+  }
+  if (poseEngine) {
+    poseEngine.stop();
+  }
+  switchScreen('start');
+  elements.startBtn.disabled = false;
+  elements.startBtn.textContent = '게임 시작';
 }
 
 /**

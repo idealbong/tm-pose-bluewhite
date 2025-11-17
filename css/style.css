@@ -154,7 +154,7 @@ body {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .timer-bar {
@@ -171,6 +171,23 @@ body {
 
 .timer-bar.danger {
   background: linear-gradient(90deg, #f44336, #e91e63);
+}
+
+/* 컨트롤 버튼 */
+.control-buttons {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.stop-btn {
+  background: linear-gradient(135deg, #f44336, #e91e63);
+  padding: 12px 36px;
+  font-size: 16px;
+}
+
+.stop-btn:hover {
+  background: linear-gradient(135deg, #e53935, #d81b60);
 }
 
 /* 메인 게임 영역 */

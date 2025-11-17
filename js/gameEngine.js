@@ -23,6 +23,7 @@ class GameEngine {
     this.currentRound = 0; // 현재 라운드 (0~4, 총 5회)
     this.failCount = 0; // 현재 단계 실패 횟수 (0~2)
     this.totalSuccess = 0; // 총 성공 횟수
+    this.isWaitingForPose = false; // 포즈 대기 중 플래그
 
     // 타이머
     this.baseTimeLimit = 1.5; // 1단계 기본 시간 (초)
@@ -142,6 +143,7 @@ class GameEngine {
    */
   startCommandTimer() {
     this.clearCommandTimer();
+    this.isWaitingForPose = true; // 포즈 대기 시작
 
     const startTime = Date.now();
     const duration = this.currentTimeLimit * 1000; // 밀리초로 변환
@@ -182,7 +184,10 @@ class GameEngine {
    * @param {string} detectedPose - 감지된 포즈 ("기본", "왼손 올리기", "오른손 올리기", "양손 올리기")
    */
   verifyPose(detectedPose) {
-    if (!this.isGameActive || this.isPaused || !this.currentCommand) return;
+    // 포즈 대기 중이 아니면 무시
+    if (!this.isGameActive || this.isPaused || !this.currentCommand || !this.isWaitingForPose) {
+      return;
+    }
 
     const isCorrect = detectedPose === this.currentCommand.expectedPose;
 
@@ -196,6 +201,7 @@ class GameEngine {
    */
   handleSuccess() {
     this.clearCommandTimer();
+    this.isWaitingForPose = false; // 포즈 대기 종료
 
     this.totalSuccess++;
     this.currentRound++;
@@ -212,10 +218,11 @@ class GameEngine {
 
     this.notifyStateChange();
 
-    // 다음 명령 발급 (0.5초 대기)
+    // 다음 명령 발급 (랜덤 대기: 0.5~1초)
+    const randomDelay = 500 + Math.random() * 500;
     setTimeout(() => {
       this.issueNewCommand();
-    }, 500);
+    }, randomDelay);
   }
 
   /**
@@ -223,6 +230,7 @@ class GameEngine {
    */
   handleFailure() {
     this.clearCommandTimer();
+    this.isWaitingForPose = false; // 포즈 대기 종료
 
     this.failCount++;
     this.currentRound++;
@@ -245,10 +253,11 @@ class GameEngine {
         this.gameOver();
       }, 1000);
     } else {
-      // 다음 명령 발급 (0.5초 대기)
+      // 다음 명령 발급 (랜덤 대기: 0.5~1초)
+      const randomDelay = 500 + Math.random() * 500;
       setTimeout(() => {
         this.issueNewCommand();
-      }, 500);
+      }, randomDelay);
     }
   }
 
