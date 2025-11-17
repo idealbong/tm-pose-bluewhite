@@ -33,16 +33,17 @@ class GameEngine {
     this.remainingTime = 1.5; // 남은 시간
     this.commandTimer = null; // 명령 타이머
 
-    // 명령
+    // 명령 (가중치 포함)
     this.commands = [
-      { text: '청기 올려', expectedPose: '왼손 올리기', type: 'raise' },
-      { text: '백기 올려', expectedPose: '오른손 올리기', type: 'raise' },
-      { text: '둘 다 올려', expectedPose: '양손 올리기', type: 'raise' },
-      { text: '청기 올리지 마', expectedPose: '기본', type: 'hold' },
-      { text: '백기 올리지 마', expectedPose: '기본', type: 'hold' },
-      { text: '둘 다 올리지 마', expectedPose: '기본', type: 'hold' }
+      { text: '청기 올려', expectedPose: '왼손 올리기', type: 'raise', weight: 35 },
+      { text: '백기 올려', expectedPose: '오른손 올리기', type: 'raise', weight: 35 },
+      { text: '둘 다 올려', expectedPose: '양손 올리기', type: 'raise', weight: 15 },
+      { text: '청기 올리지 마', expectedPose: '기본', type: 'hold', weight: 5 },
+      { text: '백기 올리지 마', expectedPose: '기본', type: 'hold', weight: 5 },
+      { text: '둘 다 올리지 마', expectedPose: '기본', type: 'hold', weight: 5 }
     ];
     this.currentCommand = null;
+    this.hasViolatedHold = false; // "올리지 마" 명령 위반 플래그
 
     // 게임 시간
     this.gameStartTime = 0;
@@ -118,9 +119,11 @@ class GameEngine {
       return;
     }
 
-    // 랜덤 명령 선택
-    const randomIndex = Math.floor(Math.random() * this.commands.length);
-    this.currentCommand = this.commands[randomIndex];
+    // 가중치 기반 랜덤 명령 선택
+    this.currentCommand = this.selectWeightedCommand();
+
+    // "올리지 마" 위반 플래그 초기화
+    this.hasViolatedHold = false;
 
     // 남은 시간 초기화
     this.remainingTime = this.currentTimeLimit;
@@ -136,6 +139,30 @@ class GameEngine {
 
     // 타이머 시작
     this.startCommandTimer();
+  }
+
+  /**
+   * 가중치 기반 명령 선택
+   * @returns {Object} 선택된 명령 객체
+   */
+  selectWeightedCommand() {
+    // 전체 가중치 합계 계산
+    const totalWeight = this.commands.reduce((sum, cmd) => sum + cmd.weight, 0);
+
+    // 0 ~ totalWeight 범위의 랜덤 값 생성
+    const random = Math.random() * totalWeight;
+
+    // 누적 가중치를 기준으로 명령 선택
+    let cumulativeWeight = 0;
+    for (const command of this.commands) {
+      cumulativeWeight += command.weight;
+      if (random < cumulativeWeight) {
+        return command;
+      }
+    }
+
+    // 폴백 (발생하지 않아야 함)
+    return this.commands[0];
   }
 
   /**
@@ -189,6 +216,17 @@ class GameEngine {
       return;
     }
 
+    // "올리지 마" 명령(type: 'hold')인 경우
+    if (this.currentCommand.type === 'hold') {
+      // 기본 포즈가 아닌 다른 포즈가 감지되면 위반으로 기록
+      if (detectedPose !== '기본') {
+        this.hasViolatedHold = true;
+      }
+      // "올리지 마" 명령은 시간 초과까지 대기해야 하므로 여기서는 성공 처리 안 함
+      return;
+    }
+
+    // "올려" 명령(type: 'raise')인 경우
     const isCorrect = detectedPose === this.currentCommand.expectedPose;
 
     if (isCorrect) {
@@ -265,7 +303,19 @@ class GameEngine {
    * 시간 초과 처리
    */
   handleTimeout() {
-    this.handleFailure();
+    // "올리지 마" 명령(type: 'hold')인 경우
+    if (this.currentCommand && this.currentCommand.type === 'hold') {
+      // 위반하지 않았으면 성공
+      if (!this.hasViolatedHold) {
+        this.handleSuccess();
+      } else {
+        // 위반했으면 실패
+        this.handleFailure();
+      }
+    } else {
+      // "올려" 명령(type: 'raise')인 경우, 시간 초과는 실패
+      this.handleFailure();
+    }
   }
 
   /**
