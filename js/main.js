@@ -77,6 +77,14 @@ async function handleStart() {
   elements.startBtn.disabled = true;
   elements.startBtn.textContent = '초기화 중...';
 
+  // 사용자 인터랙션 직후 TTS 초기화 (브라우저 autoplay policy 우회)
+  if ('speechSynthesis' in window) {
+    // 빈 텍스트로 한 번 speak 호출하여 TTS 활성화
+    const initUtterance = new SpeechSynthesisUtterance('');
+    window.speechSynthesis.speak(initUtterance);
+    console.log('TTS initialized on user interaction');
+  }
+
   try {
     await initializeGame();
 
