@@ -457,11 +457,22 @@ function playTTS(text, onEndCallback) {
     audioManager.resume();
   }
 
-  // cancel 제거 - 이것이 문제의 원인
-  // 이전 발화가 진행 중이면 큐에 추가됨
+  // 사용 가능한 음성 목록 확인
+  const voices = window.speechSynthesis.getVoices();
+  console.log('Available voices:', voices.length);
+  const koVoices = voices.filter(v => v.lang.startsWith('ko'));
+  console.log('Korean voices:', koVoices.map(v => `${v.name} (${v.lang})`));
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ko-KR';
-  utterance.rate = 1.2;
+
+  // 한국어 음성이 있으면 명시적으로 설정
+  if (koVoices.length > 0) {
+    utterance.voice = koVoices[0];
+    console.log('Using voice:', koVoices[0].name);
+  }
+
+  utterance.rate = 1.0; // 속도를 1.0으로 낮춤 (일부 브라우저에서 빠른 속도 문제)
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
@@ -487,7 +498,11 @@ function playTTS(text, onEndCallback) {
 
   console.log('Calling speak()...');
   window.speechSynthesis.speak(utterance);
-  console.log('speak() called, speaking:', window.speechSynthesis.speaking, 'pending:', window.speechSynthesis.pending);
+
+  // 상태 체크 (약간의 지연 후)
+  setTimeout(() => {
+    console.log('After 100ms - speaking:', window.speechSynthesis.speaking, 'pending:', window.speechSynthesis.pending);
+  }, 100);
 }
 
 /**
