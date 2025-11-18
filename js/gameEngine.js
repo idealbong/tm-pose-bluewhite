@@ -26,11 +26,11 @@ class GameEngine {
     this.isWaitingForPose = false; // 포즈 대기 중 플래그
 
     // 타이머
-    this.baseTimeLimit = 1.5; // 1단계 기본 시간 (초)
+    this.baseTimeLimit = 1.0; // 1단계 기본 시간 (초)
     this.timeDecrement = 0.1; // 단계마다 감소 시간
-    this.minTimeLimit = 0.6; // 최소 제한 시간
-    this.currentTimeLimit = 1.5; // 현재 제한 시간
-    this.remainingTime = 1.5; // 남은 시간
+    this.minTimeLimit = 0.2; // 최소 제한 시간
+    this.currentTimeLimit = 1.0; // 현재 제한 시간
+    this.remainingTime = 1.0; // 남은 시간
     this.commandTimer = null; // 명령 타이머
 
     // 명령 (가중치 포함)
