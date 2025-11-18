@@ -494,13 +494,36 @@ function actuallySpeak(text, onEndCallback) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ko-KR';
 
-  // 한국어 음성이 있으면 명시적으로 설정
-  if (koVoices.length > 0) {
-    utterance.voice = koVoices[0];
-    console.log('Using voice:', koVoices[0].name);
+  // 한국어 여성 음성 우선 선택 (유나, Yuna, 여성 목소리)
+  let selectedVoice = null;
+
+  // 1순위: "유나" 또는 "Yuna" 찾기
+  selectedVoice = koVoices.find(v => v.name.includes('유나') || v.name.toLowerCase().includes('yuna'));
+
+  // 2순위: "여" 또는 "Female" 포함된 음성
+  if (!selectedVoice) {
+    selectedVoice = koVoices.find(v =>
+      v.name.includes('여') ||
+      v.name.toLowerCase().includes('female') ||
+      v.name.includes('Flo') ||
+      v.name.includes('Shelley') ||
+      v.name.includes('Sandy')
+    );
   }
 
-  utterance.rate = 1.0; // 속도를 1.0으로 낮춤 (일부 브라우저에서 빠른 속도 문제)
+  // 3순위: 첫 번째 한국어 음성
+  if (!selectedVoice && koVoices.length > 0) {
+    selectedVoice = koVoices[0];
+  }
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+    console.log('Using voice:', selectedVoice.name);
+  } else {
+    console.warn('No Korean voice found, using default');
+  }
+
+  utterance.rate = 1.0;
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
