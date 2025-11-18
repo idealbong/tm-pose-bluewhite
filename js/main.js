@@ -79,10 +79,16 @@ async function handleStart() {
 
   // 사용자 인터랙션 직후 TTS 초기화 (브라우저 autoplay policy 우회)
   if ('speechSynthesis' in window) {
-    // 빈 텍스트로 한 번 speak 호출하여 TTS 활성화
-    const initUtterance = new SpeechSynthesisUtterance('');
+    // 짧은 소리로 TTS 활성화 후 즉시 취소
+    const initUtterance = new SpeechSynthesisUtterance(' '); // 공백 하나
+    initUtterance.volume = 0; // 무음
     window.speechSynthesis.speak(initUtterance);
-    console.log('TTS initialized on user interaction');
+
+    // 즉시 취소하여 큐를 비움
+    setTimeout(() => {
+      window.speechSynthesis.cancel();
+      console.log('TTS initialized and cleared');
+    }, 50);
   }
 
   try {
@@ -465,6 +471,20 @@ function playTTS(text, onEndCallback) {
     audioManager.resume();
   }
 
+  // 기존 발화가 있으면 취소 (큐에 쌓이지 않도록)
+  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+    console.log('Canceling previous TTS');
+    window.speechSynthesis.cancel();
+    // cancel 후 약간의 딜레이
+    setTimeout(() => {
+      actuallySpeak(text, onEndCallback);
+    }, 100);
+  } else {
+    actuallySpeak(text, onEndCallback);
+  }
+}
+
+function actuallySpeak(text, onEndCallback) {
   // 사용 가능한 음성 목록 확인
   const voices = window.speechSynthesis.getVoices();
   console.log('Available voices:', voices.length);
