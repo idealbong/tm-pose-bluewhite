@@ -85,9 +85,6 @@ async function handleStart() {
       audioManager.resume();
     }
 
-    // TTS 테스트 (게임 시작 전에 한 번 실행하여 활성화)
-    window.speechSynthesis.cancel();
-
     switchScreen('game');
     startGame();
   } catch (error) {
@@ -182,7 +179,13 @@ function setupGameCallbacks() {
   // 명령 발급 시
   gameEngine.setCommandIssuedCallback((data) => {
     updateCommand(data.command.text);
-    playTTS(data.command.text);
+    // TTS 재생 후 타이머 시작
+    playTTS(data.command.text, () => {
+      // TTS 발화가 끝난 후 타이머 시작
+      if (gameEngine && gameEngine.isGameActive) {
+        gameEngine.startCommandTimer();
+      }
+    });
   });
 
   // 라운드 결과 시
@@ -437,10 +440,13 @@ function showGameOverScreen(stats) {
 
 /**
  * TTS 음성 출력
+ * @param {string} text - 읽을 텍스트
+ * @param {Function} onEndCallback - 발화 종료 시 호출할 콜백 (선택사항)
  */
-function playTTS(text) {
+function playTTS(text, onEndCallback) {
   if (!('speechSynthesis' in window)) {
     console.warn('TTS not supported in this browser');
+    if (onEndCallback) onEndCallback(); // TTS 미지원 시에도 게임 진행
     return;
   }
 
@@ -451,9 +457,8 @@ function playTTS(text) {
     audioManager.resume();
   }
 
-  // 간단하고 직접적인 방식 (작동하는 코드와 동일)
-  window.speechSynthesis.cancel();
-
+  // cancel 제거 - 이것이 문제의 원인
+  // 이전 발화가 진행 중이면 큐에 추가됨
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ko-KR';
   utterance.rate = 1.2;
@@ -466,10 +471,18 @@ function playTTS(text) {
 
   utterance.onend = () => {
     console.log('✅ TTS ended');
+    // 발화 종료 후 콜백 호출
+    if (onEndCallback) {
+      onEndCallback();
+    }
   };
 
   utterance.onerror = (event) => {
     console.error('❌ TTS error:', event.error);
+    // 에러 발생 시에도 콜백 호출 (게임이 멈추지 않도록)
+    if (onEndCallback && event.error !== 'canceled') {
+      onEndCallback();
+    }
   };
 
   console.log('Calling speak()...');

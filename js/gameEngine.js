@@ -129,6 +129,7 @@ class GameEngine {
     this.remainingTime = this.currentTimeLimit;
 
     // 명령 발급 콜백
+    // 주의: 타이머는 TTS 발화가 끝난 후에 main.js에서 startCommandTimer()를 호출하여 시작됨
     if (this.onCommandIssued) {
       this.onCommandIssued({
         command: this.currentCommand,
@@ -136,9 +137,6 @@ class GameEngine {
         timeLimit: this.currentTimeLimit
       });
     }
-
-    // 타이머 시작
-    this.startCommandTimer();
   }
 
   /**
