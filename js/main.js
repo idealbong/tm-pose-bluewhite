@@ -79,16 +79,22 @@ async function handleStart() {
 
   // 사용자 인터랙션 직후 TTS 초기화 (브라우저 autoplay policy 우회)
   if ('speechSynthesis' in window) {
-    // 짧은 소리로 TTS 활성화 후 즉시 취소
-    const initUtterance = new SpeechSynthesisUtterance(' '); // 공백 하나
-    initUtterance.volume = 0; // 무음
+    // Chrome에서는 실제 발화를 해야 TTS가 활성화됨
+    const initUtterance = new SpeechSynthesisUtterance('안녕');
+    initUtterance.volume = 0.01; // 거의 무음 (완전 무음은 Chrome에서 무시됨)
+    initUtterance.rate = 10; // 매우 빠르게 (즉시 끝나도록)
+
+    initUtterance.onend = () => {
+      console.log('✅ TTS initialized successfully');
+    };
+
+    initUtterance.onerror = (e) => {
+      console.log('TTS init error (expected):', e.error);
+    };
+
     window.speechSynthesis.speak(initUtterance);
 
-    // 즉시 취소하여 큐를 비움
-    setTimeout(() => {
-      window.speechSynthesis.cancel();
-      console.log('TTS initialized and cleared');
-    }, 50);
+    console.log('TTS initialization started');
   }
 
   try {
@@ -511,27 +517,40 @@ function actuallySpeak(text, onEndCallback) {
     );
   }
 
-  // 3순위: 첫 번째 한국어 음성
+  // 3순위: Google 한국어 음성 (Chrome)
+  if (!selectedVoice) {
+    selectedVoice = koVoices.find(v =>
+      v.name.toLowerCase().includes('google') &&
+      v.lang === 'ko-KR'
+    );
+  }
+
+  // 4순위: 첫 번째 한국어 음성
   if (!selectedVoice && koVoices.length > 0) {
     selectedVoice = koVoices[0];
   }
 
   if (selectedVoice) {
     utterance.voice = selectedVoice;
-    console.log('Using voice:', selectedVoice.name);
+    console.log('Selected voice:', selectedVoice.name, '/', selectedVoice.lang);
   } else {
     console.warn('No Korean voice found, using default');
   }
 
+  // Chrome에서 안정적인 설정
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
+
+  let hasEnded = false;
 
   utterance.onstart = () => {
     console.log('✅ TTS started');
   };
 
   utterance.onend = () => {
+    if (hasEnded) return; // 중복 호출 방지
+    hasEnded = true;
     console.log('✅ TTS ended');
     // 발화 종료 후 콜백 호출
     if (onEndCallback) {
@@ -542,7 +561,8 @@ function actuallySpeak(text, onEndCallback) {
   utterance.onerror = (event) => {
     console.error('❌ TTS error:', event.error);
     // 에러 발생 시에도 콜백 호출 (게임이 멈추지 않도록)
-    if (onEndCallback && event.error !== 'canceled') {
+    if (onEndCallback && event.error !== 'canceled' && !hasEnded) {
+      hasEnded = true;
       onEndCallback();
     }
   };
@@ -554,6 +574,15 @@ function actuallySpeak(text, onEndCallback) {
   setTimeout(() => {
     console.log('After 100ms - speaking:', window.speechSynthesis.speaking, 'pending:', window.speechSynthesis.pending);
   }, 100);
+
+  // Chrome 버그 해결: 일정 시간 후에도 speaking이 true인데 소리가 안나면 강제 재시작
+  setTimeout(() => {
+    if (window.speechSynthesis.speaking && !hasEnded) {
+      console.warn('⚠️ TTS stuck, attempting resume...');
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }
+  }, 500);
 }
 
 /**
